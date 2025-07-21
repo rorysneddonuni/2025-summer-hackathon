@@ -1,48 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet" />
   <title>Home Page</title>
+  <style>
+    #tickerDropdown {
+      position: absolute;
+      z-index: 1000;
+      width: 100%;
+      background-color: white;
+      border: 1px solid #ced4da;
+      display: none;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    #tickerDropdown div {
+      padding: 8px;
+      cursor: pointer;
+    }
+
+    #tickerDropdown div:hover {
+      background-color: #f8f9fa;
+    }
+  </style>
 </head>
 <body>
+  <nav class="navbar navbar-expand-lg navbar-light bg-light px-4">
+    <a class="navbar-brand" href="#">Stock Watch</a>
+    <div class="collapse navbar-collapse">
+      <form class="d-flex position-relative ms-auto" onsubmit="return false;">
+        <input id="searchInput" class="form-control" type="search" placeholder="Search" aria-label="Search" autocomplete="off" />
+        <button class="btn btn-outline-success ms-2" type="submit">Search</button>
+        <div id="tickerDropdown"></div>
+      </form>
+    </div>
+  </nav>
 
-<script src="js/bootstrap.bundle.min.js"></script>
-  <nav class="navbar navbar-expand-lg navbar-light bg-light" style="font-family:Neue Haas Grotesk, sans-serif">
-  <a class="navbar-brand" href="#" style="font-family:montserrat, sans-serif">Stock Watch</a>
-  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-    <span class="navbar-toggler-icon"></span>
-  </button>
-
-  <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <ul class="navbar-nav mr-auto">
-      <li class="nav-item active">
-        <a class="nav-link" href="#">Home</span></a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="#">Link</a>
-      </li>
-      <li class="nav-item dropdown">
-        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-          Dropdown
-        </a>
-        <div class="dropdown-menu" aria-labelledby="navbarDropdown">
-          <a class="dropdown-item" href="#">Action</a>
-          <a class="dropdown-item" href="#">Another action</a>
-          <div class="dropdown-divider"></div>
-          <a class="dropdown-item" href="#">Something else here</a>
-        </div>
-      </li>
-    </ul>
-    <form class="form-inline my-2 my-lg-0" style = "align-items: right"></form>
-      <input class="form-control mr-sm-2" type="search"  placeholder="Search" aria-label="Search">
-      <button class = "btn btn-outline-success my-2 my-sm-02" type = "submit">Search</button>
-    </form>
+  <div class="container mt-5">
+    <h2>Top 10 Most Expensive Stocks Today</h2>
+    <table class="table table-striped" id="topStocksTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Symbol</th>
+          <th>Name</th>
+          <th>Close Price</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
-</nav>
 
+  <script>
+    const searchInput = document.getElementById('searchInput');
+    const dropdown = document.getElementById('tickerDropdown');
 
-    
+    async function fetchTickers() {
+      const accessKey = '719424b2bf8766adedf63f71b7c0c0b6';
+      const url = `https://api.marketstack.com/v1/tickers?access_key=${accessKey}&limit=10`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        const tickers = data.data || [];
+
+        dropdown.innerHTML = '';
+        tickers.forEach(ticker => {
+          const option = document.createElement('div');
+          option.textContent = `${ticker.symbol} - ${ticker.name}`;
+          option.addEventListener('click', () => {
+            searchInput.value = ticker.symbol;
+            dropdown.style.display = 'none';
+          });
+          dropdown.appendChild(option);
+        });
+        dropdown.style.display = tickers.length > 0 ? 'block' : 'none';
+      } catch (error) {
+        console.error('Error fetching tickers:', error);
+      }
+    }
+
+    searchInput.addEventListener('focus', fetchTickers);
+
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target) && e.target !== searchInput) {
+        dropdown.style.display = 'none';
+      }
+    });
+
+    async function fetchTopStocks() {
+  const accessKey = '719424b2bf8766adedf63f71b7c0c0b6';
+
+  try {
+    // Step 1: Get 10 tickers that support EOD
+    const tickerRes = await fetch(`https://api.marketstack.com/v1/tickers?access_key=${accessKey}&limit=15`);
+    const tickerData = await tickerRes.json();
+    const validSymbols = tickerData.data
+      .filter(t => t.has_eod && t.symbol) // Ensure EOD and symbol exist
+      .map(t => t.symbol);
+
+    // Step 2: Fetch latest EOD data for those tickers
+    const symbolsParam = encodeURIComponent(validSymbols.join(','));
+    const eodRes = await fetch(`https://api.marketstack.com/v1/eod/latest?access_key=${accessKey}&symbols=${symbolsParam}`);
+    const eodData = await eodRes.json();
+
+    const topStocks = eodData.data
+      .filter(stock => stock.close) // only stocks with valid close prices
+      .sort((a, b) => b.close - a.close)
+      .slice(0, 10);
+
+    // Step 3: Populate the table
+    const tbody = document.querySelector('#topStocksTable tbody');
+    tbody.innerHTML = '';
+
+    topStocks.forEach((stock, index) => {
+      const row = `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${stock.symbol}</td>
+          <td>${stock.name || '-'}</td>
+          <td>$${stock.close.toFixed(2)}</td>
+          <td>${stock.date?.split('T')[0] || '-'}</td>
+        </tr>
+      `;
+      tbody.insertAdjacentHTML('beforeend', row);
+    });
+  } catch (err) {
+    console.error('Failed to fetch top stocks:', err);
+  }
+    }
+
+    window.addEventListener('DOMContentLoaded', fetchTopStocks);
+  </script>
 </body>
 </html>
